@@ -25,7 +25,6 @@ class DailyGrapherCard extends LitElement {
   }
 
   setConfig(config) {
-
     if (!config.entity && !config.entities) {
       throw new Error("You need to define an entity");
     }
@@ -64,22 +63,23 @@ class DailyGrapherCard extends LitElement {
     }
 
     // retrieve activies in all calendars
-    calendarEntities.forEach(entity => {
+    calendarEntities.forEach((entity) => {
       const calendarEntity = (entity && entity.entity) || entity;
       const url = `calendars/${calendarEntity}?start=${this.date.today}&end=${this.date.tomorrow}`;
 
       // make all requests at once
       calendarEntityPromises.push(
-          this.hass.callApi('get', url)
-              .then(events => {
-                  activities.push(...events);
-              })
-              .catch(error => {
-                  failedActivities.push({
-                      name: entity.name || calendarEntity,
-                      error
-                  });
-              })
+        this.hass
+          .callApi("get", url)
+          .then((events) => {
+            activities.push(...events);
+          })
+          .catch((error) => {
+            failedActivities.push({
+              name: entity.name || calendarEntity,
+              error,
+            });
+          })
       );
     });
 
@@ -108,8 +108,8 @@ class DailyGrapherCard extends LitElement {
   markings() {
     let markers = [];
     let n = 0;
-    for (let i = 0; i < 360; i += 30) {
-      for (let j = 5; j <= 25; j += 5) {
+    for (let i = 0; i < 360; i += 15) {
+      for (let j = 3.75; j < 15; j += 3.75) {
         markers.push(
           html`<div
             class="marking small"
@@ -124,7 +124,7 @@ class DailyGrapherCard extends LitElement {
               class="hour"
               style="transform-origin: center; transform: rotate(${-i}deg);"
             >
-              ${n === 0 ? 12 : n}
+              ${n}
             </div>
           </div>
         </div>`
@@ -135,25 +135,16 @@ class DailyGrapherCard extends LitElement {
   }
 
   clock() {
-    const weekdays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    const weekdays = ["U", "M", "T", "W", "R", "F", "S"];
     const hours = this.currentTime.getHours();
-    const isAm = hours < 12;
-
     let dayOfWeek = this.currentTime.getDay();
     let date = this.currentTime.getDate();
     let hh = hours;
-    if (!this.config.display_24_hour_time) {
-      hh = hours % 12;
-      hh === 0 ? (hh = 12) : hh;
-    }
-
     let mm = this.currentTime.getMinutes();
     mm = mm < 10 ? "0" + mm : mm;
-
     return html` <div class="wrapper">
       <div class="clock">
         <div class="clock-content">
-          <div class="ampm">${this.config.display_24_hour_time ? "" : isAm ? "am" : "pm"}</div>
           <h2 class="time">${hh}:${mm}</h2>
           <div class="day">${weekdays[dayOfWeek]} ${date}</div>
         </div>
@@ -161,9 +152,9 @@ class DailyGrapherCard extends LitElement {
     </div>`;
   }
 
-  getDurationPercentage(startDeg, endDeg, isAm, endsOnFutureDate) {
+  getDurationPercentage(startDeg, endDeg, endsOnFutureDate) {
     if (endDeg === 0) endDeg = 360;
-    if (isAm || endsOnFutureDate) {
+    if (endsOnFutureDate) {
       if (startDeg > endDeg) endDeg += 360;
       if (endDeg > 360) endDeg = 360;
     } else {
@@ -177,11 +168,12 @@ class DailyGrapherCard extends LitElement {
   }
 
   getRotation(hours, minutes) {
-    const hoursRotation = ((hours % 12) / 12) * 360;
-    const minutesRotation = ((365 / 12) * minutes) / 60;
+    const hoursRotation = (360 / 24) * hours;
+    const minutesRotation = (360 / 24) * (minutes / 60);
     const rotation = hoursRotation + minutesRotation;
     return rotation;
   }
+
   hand() {
     const rotation = this.getRotation(
       this.currentTime.getHours(),
@@ -194,13 +186,12 @@ class DailyGrapherCard extends LitElement {
   }
 
   activities() {
-    if(!this.data.dailyActivities) return null;
+    if (!this.data.dailyActivities) return null;
     return this.data.dailyActivities.map((activity, index) => {
       const localTime = this.currentTime?.toLocaleTimeString("sv-SE");
       const { today } = this.date;
       const hours = this.currentTime.getHours();
       const endsOnFutureDate = activity.end.date > today;
-      const isAm = hours < 12;
       const isPassed =
         today === activity.end.date && localTime > activity.end.time;
 
@@ -216,38 +207,24 @@ class DailyGrapherCard extends LitElement {
       const [startHours, startMinutes] = activity.start.time.split(":");
       const [endHours, endMinutes] = activity.end.time.split(":");
 
-      const isHidden =
-        (isAm && startHours > 12) ||
-        (!isAm && endHours < 12 && !endsOnFutureDate);
-
       const activityStartsAtRotation = this.getRotation(
         startHours,
         startMinutes
       );
       const activityEndsAtRotation = this.getRotation(endHours, endMinutes);
 
-      const activityContinuesInPM =
-        !isFullDay &&
-        Number(startHours) + startMinutes / 60 < 12 &&
-        Number(endHours) + endMinutes / 60 > 12;
-
-      const durationTime = {
-        hours: (Number(endHours) + 24 - Number(startHours)) % 12,
-        minutes: (Number(endMinutes) + 60 - Number(startMinutes)) % 60,
-      };
-      const formattedDurationTime = `${
-        durationTime.hours ? `${durationTime.hours}h` : ""
-      }${durationTime.minutes ? `${durationTime.minutes}m` : ""}`;
       const duration = this.getDurationPercentage(
         activityStartsAtRotation,
         activityEndsAtRotation,
-        isAm,
         endsOnFutureDate
       );
-      const isEven = index % 2 === 0
-      let style = { backgroundColor: isEven?  "#0b4f70" : '#16597a', opacity: "0.8" };
+      const isEven = index % 2 === 0;
+      let style = {
+        backgroundColor: isEven ? "#0b4f70" : "#16597a",
+        opacity: "0.8",
+      };
       if (isActive) {
-        style.backgroundColor = "#58afe4" ;
+        style.backgroundColor = "#58afe4";
         style.opacity = "0.95";
       }
       if (isPassed) {
@@ -265,14 +242,13 @@ class DailyGrapherCard extends LitElement {
         if (endsOnFutureDate) {
           return activityStartsAtRotation;
         }
-        if (activityStartsAtRotation > activityEndsAtRotation && !isAm) {
+        if (activityStartsAtRotation > activityEndsAtRotation) {
           return 0;
         }
         return activityStartsAtRotation;
       }
       return html` <div
         class="activity ${isActive ? "active" : ""}"
-        ?hidden="${isHidden}"
         style="opacity: ${style.opacity}; 
               background: conic-gradient(${style.backgroundColor} ${duration}%, transparent 0); 
               transform: rotate(${getStartRotation()}deg);"
@@ -282,36 +258,17 @@ class DailyGrapherCard extends LitElement {
               class="continues 
                 ${isActive ? "active" : ""} 
                 ${isPassed ? "passed" : ""}"
-              style="
-                transform: rotate(${!isAm
-                ? 360 - activityStartsAtRotation
-                : 0}deg);"
+              style="transform: rotate(${360 - activityStartsAtRotation}deg);"
             ></div>`
           : ""}
-        ${activityContinuesInPM
-          ? html`<div
-              class="continues 
-                ${isActive ? "active" : ""}
-                ${isPassed ? "passed" : ""}"
-              style="
-                transform: rotate(${isAm
-                ? 360 - activityStartsAtRotation
-                : 0}deg);"
-            ></div>`
-          : ""}
-        <div class="activity-line">
-          <div class="duration">${formattedDurationTime}</div>
-        </div>
-        <div class="text-vertical">
-          <div class="${activityStartsAtRotation < 180 ? "rotate-text" : ""}">
-            ${activity.summary}
-          </div>
+        <div class="${activityStartsAtRotation < 180 ? "text-vertical-right" : "text-vertical-left"}">
+        ${activity.summary}
         </div>
       </div>`;
     });
   }
 
- static get styles() {
+  static get styles() {
     return css`
       :host {
         --dark: #252526;
@@ -344,11 +301,10 @@ class DailyGrapherCard extends LitElement {
         background-color: var(--gray);
       }
       .duration {
-        transform:translate(6px,10px) rotate(7deg);
+        transform: translate(6px, 10px) rotate(7deg);
         color: rgb(172 224 255);
         top: 5px;
         left: 5px;
-
       }
       .wrapper {
         display: block;
@@ -371,11 +327,9 @@ class DailyGrapherCard extends LitElement {
         border-radius: 50%;
         overflow: hidden;
       }
-
       .activity[hidden] {
         display: none !important;
       }
-
       .full-day-activity {
         padding: 2px 10px;
         border-radius: 6px;
@@ -388,7 +342,6 @@ class DailyGrapherCard extends LitElement {
         color: white;
         z-index: 1;
       }
-
       .activity {
         width: 100%;
         height: 100%;
@@ -400,18 +353,6 @@ class DailyGrapherCard extends LitElement {
         border-radius: 50%;
         inset: 0;
         justify-content: center;
-      }
-
-      .activity-line {
-        height: 100%;
-        width: 1px;
-        position:relative;
-        background-image: linear-gradient(
-          to top,
-          transparent 0 50%,
-          #eee 50% 93%,
-          transparent 93% 100%
-        );
       }
       .marking {
         height: 100%;
@@ -435,35 +376,16 @@ class DailyGrapherCard extends LitElement {
           #ccc 98% 100%
         );
       }
-   .hand {
+      .hand {
         background-image: linear-gradient(
           to top,
           transparent 0 50%,
-          var(--red) 50% 75%,
-          transparent 75% 100%
+          var(--red) 50% 100%
         );
         position: absolute;
-        width: 4px;
+        width: 2px;
         z-index: 2;
         height: 100%;
-      }
-      .hand::before {
-        content: "•";
-        position: absolute;
-        font-size: 36px;
-        top: 5px;
-        left: -100%;
-        z-index: 2;
-        color: var(--red);
-      }
-      .hand::after {
-        content: "•";
-        position: absolute;
-        font-size: 36px;
-        left: -100%;
-        top: 23%;
-        z-index: 2;
-        color: var(--red);
       }
       .clock {
         display: grid;
@@ -473,35 +395,40 @@ class DailyGrapherCard extends LitElement {
       .clock-content {
         text-align: center;
       }
-      .ampm {
-        min-height: 1.5em;
-      }
       .hour {
         font-size: 16px;
       }
       .time {
+        font-size: 16px;
         font-weight: 900;
         margin: 0px;
+      }
+      .day {
+        font-size: 13px;
+        font-weight: 900;
+        margin: 0px;       
       }
       .active {
         font-weight: bold;
       }
-
-      .text-vertical {
+      .text-vertical-left {
         position: absolute;
         font-size: 14px;
-        top: 0;
-        left: 50%;
-        transform-origin: -7px 27px;
+        left: 52%;
+        transform-origin: left;
         transform: rotate(90deg);
       }
-      .rotate-text {
-        transform-origin: center;
-        transform: rotate(180deg);
+      .text-vertical-right {
+        position: absolute;
+        font-size: 14px;
+        top: 33%;
+        left: 52%;
+        transform-origin: left;
+        transform: rotate(-90deg);
       }
     `;
   }
-  
+
   render() {
     if (!this.data) return "loading";
     return html`
