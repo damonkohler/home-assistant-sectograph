@@ -2,18 +2,18 @@ import {
   LitElement,
   html,
   css,
-} from "https://unpkg.com/lit-element@2.0.1/lit-element.js?module";
+} from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 
 class DailyGrapherCard extends LitElement {
   static get properties() {
     return {
-      hass: {},
-      config: {},
-      currentTime: {},
-      date: {},
-      data: { dailyActivities: [] },
-    };
-  }
+        _hass: {},
+        _config: {},
+        currentTime: {},
+        date: {},
+        data: {},
+    }
+  };
 
   getDates() {
     let today = new Date();
@@ -25,24 +25,25 @@ class DailyGrapherCard extends LitElement {
   }
 
   setConfig(config) {
-    if (!config.entity && !config.entities) {
-      throw new Error("You need to define an entity");
+    if (!config.entities) {
+      throw new Error("You need to define entities");
     }
-    this.config = config;
+    this._config = config;
     this.date = this.getDates();
-  }
-
-  getCardSize() {
-    return 2;
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    this.getCalendarEvents();
     this.currentTime = new Date();
     this.interval = window.setInterval(() => {
       this.currentTime = new Date();
     }, 10000);
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this.data) return null;
+    this.getCalendarEvents();
+  }
+
+  getCardSize() {
+    return 2;
   }
 
   disconnectedCallback() {
@@ -51,58 +52,55 @@ class DailyGrapherCard extends LitElement {
   }
 
   async getCalendarEvents() {
-    const activities = [];
-    const failedActivities = [];
-    const calendarEntityPromises = [];
-    let calendarEntities = [];
-
-    if (Array.isArray(this.config.entity)) {
-      calendarEntities = this.config.entity;
-    } else {
-      calendarEntities.push(this.config.entity);
+    if (!this._hass) {
+      return null;
     }
 
-    // retrieve activies in all calendars
-    calendarEntities.forEach((entity) => {
-      const calendarEntity = (entity && entity.entity) || entity;
-      const url = `calendars/${calendarEntity}?start=${this.date.today}&end=${this.date.tomorrow}`;
+    const allEvents = [];
+    const promises = [];
 
-      // make all requests at once
-      calendarEntityPromises.push(
-        this.hass
-          .callApi("get", url)
-          .then((events) => {
-            activities.push(...events);
+    // Retrieve activies from all calendars.
+    this._config.entities.forEach((entity) => {
+      promises.push(
+        this._hass
+          .callWS({
+            type: "call_service",
+            domain: "calendar",
+            service: "get_events",
+            target: { entity_id: entity },
+            service_data: {
+              start_date_time: this.date.today,
+              end_date_time: this.date.tomorrow,
+            },
+            return_response: true,
+          })
+          .then((r) => {
+            for (const [k, v] of Object.entries(r.response)) {
+                allEvents.push(...v.events);
+            }
           })
           .catch((error) => {
-            failedActivities.push({
-              name: entity.name || calendarEntity,
-              error,
-            });
+            console.log(error);
           })
       );
     });
 
-    // wait until all requests either succeed or fail
-    await Promise.all(calendarEntityPromises);
+    // Wait until all requests either succeed or fail.
+    await Promise.all(promises);
 
-    let items = activities.map((activity) => {
+    this.data = allEvents.map((event) => {
       return {
-        summary: activity.summary,
+        summary: event.summary,
         start: {
-          date: activity.start.date || activity.start.dateTime.split("T")[0],
-          time:
-            activity.start.dateTime?.split("T")[1].split("+")[0] || "00:00:00",
+          date: event.start.split("T")[0],
+          time: event.start?.split("T")[1].split("+")[0] || "00:00:00",
         },
         end: {
-          date: activity.end.date || activity.end.dateTime.split("T")[0],
-          time:
-            activity.end.dateTime?.split("T")[1].split("+")[0] || "23:59:00",
+          date: event.end.split("T")[0],
+          time: event.end?.split("T")[1].split("+")[0] || "23:59:00",
         },
       };
     });
-
-    this.data = { dailyActivities: items };
   }
 
   markings() {
@@ -186,8 +184,8 @@ class DailyGrapherCard extends LitElement {
   }
 
   activities() {
-    if (!this.data.dailyActivities) return null;
-    return this.data.dailyActivities.map((activity, index) => {
+    if (!this.data) return null;
+    return this.data.map((activity, index) => {
       const localTime = this.currentTime?.toLocaleTimeString("sv-SE");
       const { today } = this.date;
       const hours = this.currentTime.getHours();
@@ -232,7 +230,7 @@ class DailyGrapherCard extends LitElement {
         style.opacity = "0.5";
       }
       if (isFullDay) {
-        if (!this.config.hide_full_day_events) {
+        if (!this._config.hide_full_day_events) {
           return html`<div class="full-day-activity">${activity.summary}</div>`;
         }
         return html``;
@@ -261,8 +259,12 @@ class DailyGrapherCard extends LitElement {
               style="transform: rotate(${360 - activityStartsAtRotation}deg);"
             ></div>`
           : ""}
-        <div class="${activityStartsAtRotation < 180 ? "text-vertical-right" : "text-vertical-left"}">
-        ${activity.summary}
+        <div
+          class="${activityStartsAtRotation < 180
+            ? "text-vertical-right"
+            : "text-vertical-left"}"
+        >
+          ${activity.summary}
         </div>
       </div>`;
     });
@@ -406,7 +408,7 @@ class DailyGrapherCard extends LitElement {
       .day {
         font-size: 13px;
         font-weight: 900;
-        margin: 0px;       
+        margin: 0px;
       }
       .active {
         font-weight: bold;
@@ -430,7 +432,7 @@ class DailyGrapherCard extends LitElement {
   }
 
   render() {
-    if (!this.data) return "loading";
+    if (!this._hass || !this.data) return html``;
     return html`
       <ha-card>
         <div class="card-content">
