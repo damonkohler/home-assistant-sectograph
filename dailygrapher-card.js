@@ -9,30 +9,24 @@ class DailyGrapherCard extends LitElement {
     return {
         _hass: {},
         _config: {},
-        currentTime: {},
+        now: {},
         date: {},
         data: {},
     }
   };
-
-  getDates() {
-    let today = new Date();
-    let tomorrow = new Date();
-    tomorrow.setDate(today.getDate() + 1);
-    today = today.toLocaleDateString("sv-SE"); // only need the day
-    tomorrow = tomorrow.toLocaleDateString("sv-SE"); // only need the day
-    return { today, tomorrow };
-  }
 
   setConfig(config) {
     if (!config.entities) {
       throw new Error("You need to define entities");
     }
     this._config = config;
-    this.date = this.getDates();
-    this.currentTime = new Date();
+    this.now = new Date();
+    this.today = new Date(this.now);
+    this.today.setHours(0, 0, 0, 0);
+    this.tomorrow = new Date(this.today);
+    this.tomorrow.setDate(this.now.getDate() + 1);
     this.interval = window.setInterval(() => {
-      this.currentTime = new Date();
+      this.now = new Date();
     }, 10000);
   }
 
@@ -42,24 +36,16 @@ class DailyGrapherCard extends LitElement {
     this.getCalendarEvents();
   }
 
-  getCardSize() {
-    return 2;
-  }
-
   disconnectedCallback() {
     super.disconnectedCallback();
     window.clearInterval(this.interval);
   }
 
   async getCalendarEvents() {
-    if (!this._hass) {
-      return null;
-    }
-
     const allEvents = [];
     const promises = [];
 
-    // Retrieve activies from all calendars.
+    // Retrieve events from all calendars.
     this._config.entities.forEach((entity) => {
       promises.push(
         this._hass
@@ -69,8 +55,8 @@ class DailyGrapherCard extends LitElement {
             service: "get_events",
             target: { entity_id: entity },
             service_data: {
-              start_date_time: this.date.today,
-              end_date_time: this.date.tomorrow,
+              start_date_time: this.today.toLocaleDateString("sv-SE"),
+              end_date_time: this.tomorrow.toLocaleDateString("sv-SE"),
             },
             return_response: true,
           })
@@ -91,14 +77,8 @@ class DailyGrapherCard extends LitElement {
     this.data = allEvents.map((event) => {
       return {
         summary: event.summary,
-        start: {
-          date: event.start.split("T")[0],
-          time: event.start?.split("T")[1].split("+")[0] || "00:00:00",
-        },
-        end: {
-          date: event.end.split("T")[0],
-          time: event.end?.split("T")[1].split("+")[0] || "23:59:00",
-        },
+        start: new Date(event.start),
+        end: new Date(event.end),
       };
     });
   }
@@ -134,11 +114,11 @@ class DailyGrapherCard extends LitElement {
 
   clock() {
     const weekdays = ["U", "M", "T", "W", "R", "F", "S"];
-    const hours = this.currentTime.getHours();
-    let dayOfWeek = this.currentTime.getDay();
-    let date = this.currentTime.getDate();
+    const hours = this.now.getHours();
+    let dayOfWeek = this.now.getDay();
+    let date = this.now.getDate();
     let hh = hours;
-    let mm = this.currentTime.getMinutes();
+    let mm = this.now.getMinutes();
     mm = mm < 10 ? "0" + mm : mm;
     return html` <div class="wrapper">
       <div class="clock">
@@ -165,88 +145,63 @@ class DailyGrapherCard extends LitElement {
     return durationInPercentage;
   }
 
-  getRotation(hours, minutes) {
-    const hoursRotation = (360 / 24) * hours;
-    const minutesRotation = (360 / 24) * (minutes / 60);
-    const rotation = hoursRotation + minutesRotation;
-    return rotation;
+  getRotation(date) {
+    return (360 / 24) * (date.getHours() + (date.getMinutes() / 60));
   }
 
   hand() {
-    const rotation = this.getRotation(
-      this.currentTime.getHours(),
-      this.currentTime.getMinutes()
-    );
+    const rotation = this.getRotation(this.now);
     return html`<div
       class="hand"
       style="transform: rotate(${rotation}deg)"
     ></div>`;
   }
 
-  activities() {
+  events() {
     if (!this.data) return null;
-    return this.data.map((activity, index) => {
-      const localTime = this.currentTime?.toLocaleTimeString("sv-SE");
-      const { today } = this.date;
-      const hours = this.currentTime.getHours();
-      const endsOnFutureDate = activity.end.date > today;
-      const isPassed =
-        today === activity.end.date && localTime > activity.end.time;
-
-      const isFullDay =
-        activity.start.date < activity.end.date &&
-        activity.start.time === "00:00:00" &&
-        activity.end.time === "23:59:00";
-      const isActive =
-        !isFullDay &&
-        localTime > activity.start.time &&
-        (localTime < activity.end.time || endsOnFutureDate);
-
-      const [startHours, startMinutes] = activity.start.time.split(":");
-      const [endHours, endMinutes] = activity.end.time.split(":");
-
-      const activityStartsAtRotation = this.getRotation(
-        startHours,
-        startMinutes
-      );
-      const activityEndsAtRotation = this.getRotation(endHours, endMinutes);
-
+    return this.data.map((event, index) => {
+      const endsOnFutureDate = event.end >= this.tomorrow;
+      const isPast = event.end < this.now;
+      const isAllDay = (event.end - event.start) >= 8.64e+7;
+      const isInProgress =
+        !isAllDay && event.start < this.now && this.now < event.end;
+      const startRotation = this.getRotation(event.start);
+      const endRotation = this.getRotation(event.end);
       const duration = this.getDurationPercentage(
-        activityStartsAtRotation,
-        activityEndsAtRotation,
+        startRotation,
+        endRotation,
         endsOnFutureDate
       );
-      const isEven = index % 2 === 0;
       let style = {
-        backgroundColor: isEven ? "#0b4f70" : "#16597a",
+        backgroundColor: index % 2 ? "var(--backgroundBlue)" : "#0b4f70",
         opacity: "0.8",
       };
-      if (isActive) {
-        style.backgroundColor = "#58afe4";
+      if (isInProgress) {
+        style.backgroundColor = "var(--lightblue)";
         style.opacity = "0.95";
       }
-      if (isPassed) {
-        style.backgroundColor = "#888";
+      if (isPast) {
+        style.backgroundColor = "var(--gray)";
         style.opacity = "0.5";
       }
-      if (isFullDay) {
+      if (isAllDay) {
         if (!this._config.hide_full_day_events) {
-          return html`<div class="full-day-activity">${activity.summary}</div>`;
+          return html`<div class="full-day-event">${event.summary}</div>`;
         }
         return html``;
       }
 
       function getStartRotation() {
         if (endsOnFutureDate) {
-          return activityStartsAtRotation;
+          return startRotation;
         }
-        if (activityStartsAtRotation > activityEndsAtRotation) {
+        if (startRotation > endRotation) {
           return 0;
         }
-        return activityStartsAtRotation;
+        return startRotation;
       }
       return html` <div
-        class="activity ${isActive ? "active" : ""}"
+        class="event ${isInProgress ? "active" : ""}"
         style="opacity: ${style.opacity}; 
               background: conic-gradient(${style.backgroundColor} ${duration}%, transparent 0); 
               transform: rotate(${getStartRotation()}deg);"
@@ -254,17 +209,17 @@ class DailyGrapherCard extends LitElement {
         ${endsOnFutureDate
           ? html`<div
               class="continues 
-                ${isActive ? "active" : ""} 
-                ${isPassed ? "passed" : ""}"
-              style="transform: rotate(${360 - activityStartsAtRotation}deg);"
+                ${isInProgress ? "active" : ""} 
+                ${isPast ? "past" : ""}"
+              style="transform: rotate(${360 - startRotation}deg);"
             ></div>`
           : ""}
         <div
-          class="${activityStartsAtRotation < 180
+          class="${startRotation < 180
             ? "text-vertical-right"
             : "text-vertical-left"}"
         >
-          ${activity.summary}
+          ${event.summary}
         </div>
       </div>`;
     });
@@ -287,20 +242,23 @@ class DailyGrapherCard extends LitElement {
         position: absolute;
         top: 26px;
         left: -10px;
-        background-image: linear-gradient(
-          to top right,
-          transparent 0 50%,
-          var(--backgroundBlue) 50% 100%
-        );
         transform: rotate(45deg);
         border-top-right-radius: 4px;
         border-bottom-left-radius: 4px;
       }
       .continues.active::before {
-        background-color: var(--lightblue);
+        background-image: linear-gradient(
+            to top right,
+            transparent 0 50%,
+            var(--lightblue) 50% 100%
+          );
       }
-      .continues.passed::before {
-        background-color: var(--gray);
+      .continues.past::before {
+        background-image: linear-gradient(
+            to top right,
+            transparent 0 50%,
+            var(--backgroundBlue) 50% 100%
+          );
       }
       .duration {
         transform: translate(6px, 10px) rotate(7deg);
@@ -329,10 +287,10 @@ class DailyGrapherCard extends LitElement {
         border-radius: 50%;
         overflow: hidden;
       }
-      .activity[hidden] {
+      .event[hidden] {
         display: none !important;
       }
-      .full-day-activity {
+      .full-day-event {
         padding: 2px 10px;
         border-radius: 6px;
         background-color: var(--lightblue);
@@ -344,7 +302,7 @@ class DailyGrapherCard extends LitElement {
         color: white;
         z-index: 1;
       }
-      .activity {
+      .event {
         width: 100%;
         height: 100%;
         color: white;
@@ -438,7 +396,7 @@ class DailyGrapherCard extends LitElement {
         <div class="card-content">
           <div class="outer-clock">
             ${this.markings()} ${this.clock()} ${this.hand()}
-            ${this.activities()}
+            ${this.events()}
           </div>
         </div>
       </ha-card>
