@@ -7,13 +7,15 @@ import {
 class DailyGrapherCard extends LitElement {
   static get properties() {
     return {
-        _hass: {},
-        _config: {},
-        now: {},
-        date: {},
-        data: {},
-    }
-  };
+      _hass: {},
+      _config: {
+        hide_full_day_events: false,
+      },
+      now: {},
+      date: {},
+      data: {},
+    };
+  }
 
   setConfig(config) {
     if (!config.entities) {
@@ -42,10 +44,8 @@ class DailyGrapherCard extends LitElement {
   }
 
   async getCalendarEvents() {
-    const allEvents = [];
-    const promises = [];
-
-    // Retrieve events from all calendars.
+    let allEvents = [];
+    let promises = [];
     this._config.entities.forEach((entity) => {
       promises.push(
         this._hass
@@ -62,7 +62,7 @@ class DailyGrapherCard extends LitElement {
           })
           .then((r) => {
             for (const [k, v] of Object.entries(r.response)) {
-                allEvents.push(...v.events);
+              allEvents.push(...v.events);
             }
           })
           .catch((error) => {
@@ -71,7 +71,6 @@ class DailyGrapherCard extends LitElement {
       );
     });
 
-    // Wait until all requests either succeed or fail.
     await Promise.all(promises);
 
     this.data = allEvents.map((event) => {
@@ -146,7 +145,7 @@ class DailyGrapherCard extends LitElement {
   }
 
   getRotation(date) {
-    return (360 / 24) * (date.getHours() + (date.getMinutes() / 60));
+    return (360 / 24) * (date.getHours() + date.getMinutes() / 60);
   }
 
   hand() {
@@ -162,7 +161,7 @@ class DailyGrapherCard extends LitElement {
     return this.data.map((event, index) => {
       const endsOnFutureDate = event.end >= this.tomorrow;
       const isPast = event.end < this.now;
-      const isAllDay = (event.end - event.start) >= 8.64e+7;
+      const isAllDay = event.end - event.start >= 8.64e7;
       const isInProgress =
         !isAllDay && event.start < this.now && this.now < event.end;
       const startRotation = this.getRotation(event.start);
@@ -248,17 +247,17 @@ class DailyGrapherCard extends LitElement {
       }
       .continues.active::before {
         background-image: linear-gradient(
-            to top right,
-            transparent 0 50%,
-            var(--lightblue) 50% 100%
-          );
+          to top right,
+          transparent 0 50%,
+          var(--lightblue) 50% 100%
+        );
       }
       .continues.past::before {
         background-image: linear-gradient(
-            to top right,
-            transparent 0 50%,
-            var(--backgroundBlue) 50% 100%
-          );
+          to top right,
+          transparent 0 50%,
+          var(--backgroundBlue) 50% 100%
+        );
       }
       .duration {
         transform: translate(6px, 10px) rotate(7deg);
@@ -395,8 +394,7 @@ class DailyGrapherCard extends LitElement {
       <ha-card>
         <div class="card-content">
           <div class="outer-clock">
-            ${this.markings()} ${this.clock()} ${this.hand()}
-            ${this.events()}
+            ${this.markings()} ${this.clock()} ${this.hand()} ${this.events()}
           </div>
         </div>
       </ha-card>
