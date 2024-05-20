@@ -4,7 +4,7 @@ import {
   css,
 } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 
-class DailyGrapherCard extends LitElement {
+class SectographCard extends LitElement {
   static get properties() {
     return {
       _hass: {},
@@ -402,4 +402,4 @@ class DailyGrapherCard extends LitElement {
   }
 }
 
-customElements.define("dailygrapher-card", DailyGrapherCard);
+customElements.define("sectograph-card", SectographCard);

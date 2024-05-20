@@ -1,54 +1,25 @@
-# DailyGrapher
-A Hacs Custom Card that shows a calendar on a clock
-
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
-
-
-![grapher](https://user-images.githubusercontent.com/132680575/236479315-7daaa0fb-3be2-41cb-abde-8fd94f37f595.png)
+# Sectograph
+A custom card that shows calendar events on a 24-hour sectograph.
 
 ## Usage
 Add a custom card with the following settings:
 
-Single Calendar:
 ```yaml
-type: custom:dailygrapher-card
-entity: calendar.calendar_id
-hide_full_day_events: true
-```
-
-Multiple Calendars:
-```yaml
-type: custom:dailygrapher-card
-entity: 
+type: custom:sectograph-card
+entities: 
     - calendar.calendar_id
     - calendar.calendar_id_2
 hide_full_day_events: true
 ```
+### Options
+entities: should be existing, valid calendar entities.
 
-### Options:
-entity: should be a valid and existing calendar entity ID (Tested with google calendar).
+hide_full_day_events: (boolean) all day events are shown separately if enabled.
 
-hide_full_day_events: (boolean) I recommend not showing full day events.
-
-display_24_hour_time: (boolean) change the time in the centre to display in 24 hour notation.  
-
-### How it works
-It shows all upcoming events in the current 12 hours. 
-It's most likely buggy.
-
-* Add events to your calendar of choice.
-
-## Troubleshooting
-The card uses the calendar events, If events don't show up, first refresh the calendars, and ensure you can see the event in the calendar.
-
-
----
-
-# Add a custom repo to HACS:
-Custom Repositories
+# Adding a custom repo to HACS
 1. Go to any of the sections (integrations, frontend, automation).
 1. Click on the 3 dots in the top right corner.
 1. Select "Custom repositories"
-1. Add the URL to the repository. (https://github.com/000miix/DailyGrapher)
-1. Select the correct category.
-1. Click the "ADD" button.
+1. Add the URL to the repository. (https://github.com/damonkohler/home-assistant-sectograph)
+1. Select the Frontend category.
+1. Click the "Add" button.

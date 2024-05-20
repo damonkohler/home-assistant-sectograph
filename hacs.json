@@ -1,6 +1,6 @@
 {
-  "name":"DailyGrapher Card",
-  "content_in_root":true,
-  "filename":"dailygrapher-card.js",
+  "name": "Sectograph Card",
+  "content_in_root": true,
+  "filename": "sectograph-card.js",
   "render_readme": true
 }
