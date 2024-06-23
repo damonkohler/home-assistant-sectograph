@@ -112,7 +112,7 @@ class SectographCard extends LitElement {
   }
 
   clock() {
-    const weekdays = ["U", "M", "T", "W", "R", "F", "S"];
+    const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const hours = this.now.getHours();
     let dayOfWeek = this.now.getDay();
     let date = this.now.getDate();
