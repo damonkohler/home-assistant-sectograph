@@ -270,6 +270,7 @@ class SectographCard extends LitElement {
         position: absolute;
         aspect-ratio: 1/1;
         width: 80px;
+        height: 80px;
         z-index: 3;
         border-radius: 50%;
         background-color: var(--lightblue);
